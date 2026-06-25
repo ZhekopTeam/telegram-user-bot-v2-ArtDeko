@@ -1,0 +1,16 @@
+x-bot-common: &bot-common
+  build: .
+  image: zhekop/tg-user-bot-v2-artdeko:main
+  env_file:
+    - .env
+  environment:
+    - TZ=Europe/Moscow
+  volumes:
+    - ./data:/bot/data
+    - ./sessions:/bot/sessions
+
+services:
+  bot:
+    <<: *bot-common
+    command: ["main.py"]
+    restart: unless-stopped
