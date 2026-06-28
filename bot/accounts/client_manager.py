@@ -4,7 +4,7 @@ from pyrogram import Client
 from utils.logger import logger
 from config import settings
 from utils.database import AccountRepository, decrypt_session
-from utils.bot_notifications import notify_session_revoked
+from utils import BotNotifications
 
 
 @dataclass
@@ -81,7 +81,7 @@ class ClientManager:
             await client.start()
         except Exception as e:
             logger.error(f"Cannot start client for {account.phone}: {e}")
-            await notify_session_revoked(
+            await BotNotifications.notify_session_revoked(
                 self._bot, account.tg_id, account.phone, type(e).__name__
             )
             return None

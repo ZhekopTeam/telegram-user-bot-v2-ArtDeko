@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, date, timedelta
+from datetime import datetime, date, timedelta
 from uuid import uuid4
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
@@ -7,8 +7,7 @@ from aiogram.fsm.context import FSMContext
 from config import settings, bot as tg_bot
 from utils.FSM import AddWarmup
 from utils.logger import logger
-from utils.session_repo import get_session_accounts, mask_phone
-from utils.sheets_sync import sync_warmup
+from utils import SessionRepository, SheetsSync
 from utils.database import (
     WarmupGroupRepository,
     AccountRepository,
@@ -28,7 +27,7 @@ from app.keyboards import (
     warmup_confirm_kb,
     warmup_edit_kb,
 )
-from .accounts_warmup_menu import build_groups_view, warmup_text
+from .warmup_menu import build_groups_view, warmup_text
 
 router_warmup_create = Router(name="warmup_create")
 
@@ -71,7 +70,7 @@ async def _build_preview_text(data: dict) -> str:
     for i, acc_id in enumerate(selected):
         a = accounts.get(acc_id)
         chain_lines.append(
-            f"{i + 1}. {mask_phone(a.phone) if a else '?'}"
+            f"{i + 1}. {SessionRepository.mask_phone(a.phone) if a else '?'}"
         )
 
     start_date = date.fromisoformat(data["start_date"])
@@ -119,7 +118,7 @@ async def cb_warmup_add(callback: CallbackQuery, state: FSMContext) -> None:
     if not is_admin(callback.from_user.id):
         await callback.answer()
         return
-    accounts = await get_session_accounts()
+    accounts = await SessionRepository.get_session_accounts()
     active = [a for a in accounts if a[2] == "active"]
     if len(active) < 2:
         await callback.answer(
@@ -154,7 +153,7 @@ async def msg_group_name(message: Message, state: FSMContext) -> None:
         )
         return
     await state.update_data(name=name, selected=[])
-    accounts = await get_session_accounts()
+    accounts = await SessionRepository.get_session_accounts()
     busy_ids = await WarmupGroupRepository().get_account_ids_in_active_groups()
     free_accounts = [a for a in accounts if a[0] not in busy_ids]
     if len([a for a in free_accounts if a[2] == "active"]) < 2:
@@ -195,7 +194,7 @@ async def cb_pick_account(callback: CallbackQuery, state: FSMContext) -> None:
             return
         selected.append(account_id)
     await state.update_data(selected=selected)
-    accounts = await get_session_accounts()
+    accounts = await SessionRepository.get_session_accounts()
     busy_ids = await WarmupGroupRepository().get_account_ids_in_active_groups()
     free_accounts = [a for a in accounts if a[0] not in busy_ids]
     await callback.message.edit_reply_markup(
@@ -448,7 +447,7 @@ async def cb_confirm_ok(callback: CallbackQuery, state: FSMContext) -> None:
             logger.exception(f"Immediate plan failed for {group.id}: {e}")
 
     await state.clear()
-    await sync_warmup()
+    await SheetsSync.sync_warmup()
 
     rows = await build_groups_view()
     await callback.message.edit_text(

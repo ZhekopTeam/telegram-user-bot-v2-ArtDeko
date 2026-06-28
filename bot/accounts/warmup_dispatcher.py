@@ -26,7 +26,7 @@ from utils.database import (
     ScheduledMessage,
     WarmupGroupRepository,
 )
-from utils.bot_notifications import notify_session_revoked, notify_admins
+from utils import BotNotifications
 from accounts.client_manager import ClientManager
 from accounts.warmup_planner import WarmupPlanner
 
@@ -210,7 +210,7 @@ class WarmupDispatcher:
                 f"FloodWait {wait_sec}s for {sender.phone}, rescheduled msg {msg.id}")
             return
         except _FATAL_SESSION_ERRORS as e:
-            await notify_session_revoked(
+            await BotNotifications.notify_session_revoked(
                 self._bot, sender.tg_id, sender.phone, type(e).__name__)
             await self._cm.stop(sender.id)
             await self._messages.mark_failed(msg.id, f"session: {type(e).__name__}")
@@ -229,7 +229,7 @@ class WarmupDispatcher:
     async def _reschedule_or_fail(self, msg: ScheduledMessage, error: str) -> None:
         if msg.attempts + 1 >= _MAX_ATTEMPTS:
             await self._messages.mark_failed(msg.id, error)
-            await notify_admins(
+            await BotNotifications.notify_admins(
                 self._bot,
                 "🚨 <b>Сообщение прогрева провалено</b>\n"
                 f"🆔 <code>{msg.id[:8]}</code>\n"

@@ -7,8 +7,7 @@ from config import settings
 from utils.accounts_auth import AccountAuth
 from utils.FSM import AddAccount
 from utils.logger import logger
-from utils.session_repo import get_session_accounts
-from utils.sheets_sync import sync_accounts
+from utils import SessionRepository, SheetsSync
 from app.keyboards import (
     build_code_message,
     auth_code_kb,
@@ -30,8 +29,7 @@ async def cb_add_account(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await state.set_state(AddAccount.waiting_phone)
     await callback.message.edit_text(
-        "Введите номер телефона аккаунта в формате <b>+79991234567</b>.\n"
-        "Можно также ввести номер, начинающийся с 8 — бот примет его автоматически.",
+        "Введите <b>номер телефона</b> аккаунта (например, <code>+79991112233</code>):",
         reply_markup=back_to_main_kb(),
     )
     await callback.answer()
@@ -50,7 +48,7 @@ async def handle_phone(message: Message, state: FSMContext, account_auth: Accoun
         )
     except FileExistsError:
         await state.clear()
-        accounts = await get_session_accounts()
+        accounts = await SessionRepository.get_session_accounts()
         await message.answer(
             f"Аккаунт {phone} уже авторизован.",
             reply_markup=accounts_list_kb(accounts),
@@ -58,7 +56,7 @@ async def handle_phone(message: Message, state: FSMContext, account_auth: Accoun
     except Exception as e:
         logger.error(f"Auth start error: {e}")
         await state.clear()
-        accounts = await get_session_accounts()
+        accounts = await SessionRepository.get_session_accounts()
         await message.answer(
             f"Ошибка при отправке кода: {e}",
             reply_markup=accounts_list_kb(accounts),
@@ -70,7 +68,7 @@ async def handle_code_as_text(message: Message, state: FSMContext, account_auth:
     await message.delete()
     await account_auth.cancel()
     await state.clear()
-    accounts = await get_session_accounts()
+    accounts = await SessionRepository.get_session_accounts()
     await message.answer(
         "❌ Авторизация сброшена.\n\n"
         "Код вводится через кнопки, а не сообщением.",
@@ -91,18 +89,18 @@ async def handle_code_press(callback: CallbackQuery, state: FSMContext, account_
             result = await account_auth.confirm_code(callback.from_user.id, code)
             if result == "ok":
                 await state.clear()
-                accounts = await get_session_accounts()
+                accounts = await SessionRepository.get_session_accounts()
                 await callback.message.edit_text(
                     "✅ Аккаунт успешно добавлен!",
                     reply_markup=accounts_list_kb(accounts),
                 )
-                await sync_accounts()
+                await SheetsSync.sync_accounts()
             elif result == "need_password":
                 await state.set_state(AddAccount.waiting_password)
                 await callback.message.edit_text("🔐 Введите пароль 2FA сообщением:")
         except Exception as e:
             await state.clear()
-            accounts = await get_session_accounts()
+            accounts = await SessionRepository.get_session_accounts()
             await callback.message.edit_text(
                 f"Ошибка: {e}",
                 reply_markup=accounts_list_kb(accounts),
@@ -128,17 +126,17 @@ async def handle_password(message: Message, state: FSMContext, account_auth: Acc
     try:
         await account_auth.confirm_password(message.from_user.id, password)
         await state.clear()
-        accounts = await get_session_accounts()
+        accounts = await SessionRepository.get_session_accounts()
         await message.answer(
             "✅ Аккаунт успешно добавлен!",
             reply_markup=accounts_list_kb(accounts),
         )
-        await sync_accounts()
+        await SheetsSync.sync_accounts()
     except Exception as e:
         logger.error(f"Password confirm error: {e}")
         await account_auth.cancel()
         await state.clear()
-        accounts = await get_session_accounts()
+        accounts = await SessionRepository.get_session_accounts()
         await message.answer(
             f"Неверный пароль или ошибка: {e}",
             reply_markup=accounts_list_kb(accounts),

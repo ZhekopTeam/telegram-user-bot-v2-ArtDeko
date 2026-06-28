@@ -5,8 +5,7 @@ from aiogram.fsm.context import FSMContext
 
 from config import settings
 from utils.logger import logger
-from utils.session_repo import mask_phone
-from utils.sheets_sync import sync_warmup
+from utils import SessionRepository, SheetsSync
 from utils.database import (
     WarmupGroupRepository,
     ScheduledMessageRepository,
@@ -60,7 +59,7 @@ async def render_detail(callback: CallbackQuery, group_id: str) -> None:
     for m in members:
         a = accounts.get(m.account_id)
         chain_lines.append(
-            f"{m.position + 1}. {mask_phone(a.phone) if a else '?'}"
+            f"{m.position + 1}. {SessionRepository.mask_phone(a.phone) if a else '?'}"
         )
 
     stats = await msg_repo.count_by_status_for_group(group_id)
@@ -145,7 +144,7 @@ async def cb_warmup_pause(callback: CallbackQuery) -> None:
     group_id = callback.data.split(":", 1)[1]
     await WarmupGroupRepository().set_status(group_id, "paused")
     await ScheduledMessageRepository().cancel_pending_for_group(group_id)
-    await sync_warmup()
+    await SheetsSync.sync_warmup()
     await render_detail(callback, group_id)
     await callback.answer("⏸ Поставлено на паузу")
 
@@ -157,7 +156,7 @@ async def cb_warmup_resume(callback: CallbackQuery) -> None:
         return
     group_id = callback.data.split(":", 1)[1]
     await WarmupGroupRepository().set_status(group_id, "enabled")
-    await sync_warmup()
+    await SheetsSync.sync_warmup()
     await render_detail(callback, group_id)
     await callback.answer("▶️ Возобновлено")
 
@@ -170,7 +169,7 @@ async def cb_warmup_delete(callback: CallbackQuery, state: FSMContext) -> None:
     group_id = callback.data.split(":", 1)[1]
     await WarmupGroupRepository().delete(group_id)
     await callback.answer("🗑 Удалено")
-    await sync_warmup()
+    await SheetsSync.sync_warmup()
     rows = await build_groups_view()
     await callback.message.edit_text(
         await warmup_text(),
@@ -199,8 +198,8 @@ async def cb_warmup_queue(callback: CallbackQuery) -> None:
             r = accounts.get(m.receiver_id)
             ts = m.run_at.astimezone().strftime("%d.%m %H:%M")
             lines.append(
-                f"• {ts} | {mask_phone(s.phone) if s else '?'} → "
-                f"{mask_phone(r.phone) if r else '?'}"
+                f"• {ts} | {SessionRepository.mask_phone(s.phone) if s else '?'} → "
+                f"{SessionRepository.mask_phone(r.phone) if r else '?'}"
             )
         text = "📋 <b>Ближайшие сообщения:</b>\n\n" + "\n".join(lines)
 

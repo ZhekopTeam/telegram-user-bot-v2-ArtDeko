@@ -106,13 +106,15 @@ def _sheets_enabled() -> bool:
     return True
 
 
-async def sync_accounts() -> None:
-    if not _sheets_enabled():
-        return
-    await _run_blocking(_sync_accounts_blocking)
+class SheetsSync:
+    @classmethod
+    async def sync_accounts(cls) -> None:
+        if not _sheets_enabled():
+            return
+        await _run_blocking(_sync_accounts_blocking)
 
-
-async def sync_warmup() -> None:
-    if not _sheets_enabled():
-        return
-    await _run_blocking(_sync_warmup_blocking)
+    @classmethod
+    async def sync_warmup(cls) -> None:
+        if not _sheets_enabled():
+            return
+        await _run_blocking(_sync_warmup_blocking)

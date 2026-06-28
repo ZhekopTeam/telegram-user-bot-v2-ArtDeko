@@ -3,8 +3,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from config import settings
-from utils.session_repo import get_session_accounts, delete_session
-from utils.sheets_sync import sync_accounts
+from utils import SessionRepository, SheetsSync
 from app.keyboards import (
     main_menu_kb,
     accounts_list_kb,
@@ -28,7 +27,7 @@ def _menu_text() -> str:
 
 
 async def _accounts_text() -> str:
-    accounts = await get_session_accounts()
+    accounts = await SessionRepository.get_session_accounts()
     if accounts:
         return f"📱 <b>Авторизованные аккаунты</b> ({len(accounts)}):"
     return "📱 Авторизованных аккаунтов пока нет."
@@ -58,7 +57,7 @@ async def cb_accounts(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
     await state.clear()
-    accounts = await get_session_accounts()
+    accounts = await SessionRepository.get_session_accounts()
     await callback.message.edit_text(
         await _accounts_text(),
         reply_markup=accounts_list_kb(accounts),
@@ -72,14 +71,19 @@ async def cb_account_detail(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     account_id = callback.data.split(":", 1)[1]
-    accounts = await get_session_accounts()
+    accounts = await SessionRepository.get_session_accounts()
     target = next((a for a in accounts if a[0] == account_id), None)
     if not target:
         await callback.answer("Аккаунт не найден", show_alert=True)
         return
     _, phone, status = target
 
-    status_emoji = "✅" if status == "active" else "⚠️"
+    if status == "active":
+        status_emoji = "✅"
+    elif status == "warmup":
+        status_emoji = "🔥"
+    else:
+        status_emoji = "⚠️"
     text = f" Статус: <code>{status}</code> {status_emoji}\n\nНомер: <b>{phone}</b>"
 
     await callback.message.edit_text(
@@ -93,23 +97,23 @@ async def cb_delete_account(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     account_id = callback.data.split(":", 1)[1]
-    accounts = await get_session_accounts()
+    accounts = await SessionRepository.get_session_accounts()
     target = next((a for a in accounts if a[0] == account_id), None)
     if not target:
         await callback.answer("⚠️ Аккаунт не найден", show_alert=True)
         return
 
     _, phone, _ = target
-    deleted = await delete_session(phone)
+    deleted = await SessionRepository.delete_session(phone)
     if deleted:
         logger.info(
             f"Account {phone} deleted by admin {callback.from_user.id}")
         await callback.answer("✅ Сессия удалена")
-        await sync_accounts()
+        await SheetsSync.sync_accounts()
     else:
         await callback.answer("⚠️ Не удалось удалить", show_alert=True)
 
-    accounts = await get_session_accounts()
+    accounts = await SessionRepository.get_session_accounts()
     await callback.message.edit_text(
         await _accounts_text(),
         reply_markup=accounts_list_kb(accounts),
