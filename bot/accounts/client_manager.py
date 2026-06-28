@@ -36,6 +36,38 @@ class ClientManager:
         if not account or account.status != "active":
             return None
 
+        # Check if the account belongs to an active warmup group with a proxy
+        from utils.database.db_engine import get_session_factory
+        from utils.database.models import WarmupGroup, WarmupGroupMember, Proxy
+        from sqlalchemy import select
+
+        proxy_dict = None
+        try:
+            async with get_session_factory()() as session:
+                stmt = (
+                    select(Proxy)
+                    .join(WarmupGroup, WarmupGroup.proxy_id == Proxy.id)
+                    .join(WarmupGroupMember, WarmupGroupMember.group_id == WarmupGroup.id)
+                    .where(
+                        WarmupGroupMember.account_id == account_id,
+                        WarmupGroup.status.in_(["enabled", "paused"])
+                    )
+                )
+                res = await session.execute(stmt)
+                proxy_obj = res.scalar_one_or_none()
+                if proxy_obj:
+                    proxy_dict = {
+                        "scheme": proxy_obj.proxy_type,
+                        "hostname": proxy_obj.host,
+                        "port": proxy_obj.port,
+                    }
+                    if proxy_obj.username:
+                        proxy_dict["username"] = proxy_obj.username
+                    if proxy_obj.password:
+                        proxy_dict["password"] = proxy_obj.password
+        except Exception as e:
+            logger.warning(f"Failed to check proxy for account {account_id}: {e}")
+
         try:
             session_string = decrypt_session(account.session_data)
             client = Client(
@@ -44,6 +76,7 @@ class ClientManager:
                 api_hash=settings.API_HASH,
                 session_string=session_string,
                 in_memory=True,
+                proxy=proxy_dict,
             )
             await client.start()
         except Exception as e:
