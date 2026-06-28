@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 
 from config import settings
 from utils.FSM import AddProxy
-from utils.database import Proxy, ProxyRepository
+from utils.database import Proxy, ProxyRepository, encrypt_session, decrypt_session
 from app.keyboards import (
     proxy_list_kb,
     proxy_detail_kb,
@@ -52,7 +52,8 @@ async def cb_proxy_detail(callback: CallbackQuery) -> None:
         await callback.answer("Прокси не найден", show_alert=True)
         return
 
-    auth = f"{proxy.username}:***@" if proxy.username else ""
+    decrypted_user = decrypt_session(proxy.username) if proxy.username else None
+    auth = f"{decrypted_user}:***@" if decrypted_user else ""
     text = (
         f"🌐 <b>{proxy.name}</b>\n\n"
         f"Тип: <code>{proxy.proxy_type}</code>\n"
@@ -126,6 +127,9 @@ async def msg_proxy_input(message: Message, state: FSMContext) -> None:
     port = int(m.group(5))
 
     name = f"{host}:{port}"
+    
+    enc_user = encrypt_session(username) if username else None
+    enc_pass = encrypt_session(password) if password else None
 
     proxy = Proxy(
         id=str(uuid4()),
@@ -133,8 +137,8 @@ async def msg_proxy_input(message: Message, state: FSMContext) -> None:
         proxy_type=ptype,
         host=host,
         port=port,
-        username=username,
-        password=password,
+        username=enc_user,
+        password=enc_pass,
     )
     await ProxyRepository().add(proxy)
     await state.clear()
