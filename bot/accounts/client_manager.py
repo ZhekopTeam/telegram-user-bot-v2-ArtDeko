@@ -14,6 +14,7 @@ class UserBotClient:
     tg_id: int
     username: str
     phone: str
+    ip: str = "unknown"
 
 
 class ClientManager:
@@ -62,11 +63,16 @@ class ClientManager:
                         "port": proxy_obj.port,
                     }
                     if proxy_obj.username:
-                        proxy_dict["username"] = proxy_obj.username
+                        proxy_dict["username"] = decrypt_session(proxy_obj.username)
                     if proxy_obj.password:
-                        proxy_dict["password"] = proxy_obj.password
+                        proxy_dict["password"] = decrypt_session(proxy_obj.password)
         except Exception as e:
             logger.warning(f"Failed to check proxy for account {account_id}: {e}")
+
+        # Check and log external IP address
+        actual_ip = await get_client_ip(proxy_dict)
+        proxy_desc = f"{proxy_dict['scheme']}://{proxy_dict['hostname']}:{proxy_dict['port']}" if proxy_dict else "direct connection"
+        logger.info(f"Checking IP for account {account.phone} using {proxy_desc} -> External IP: {actual_ip}")
 
         try:
             session_string = decrypt_session(account.session_data)
@@ -95,8 +101,48 @@ class ClientManager:
         )
         self._clients[account_id] = userbot
         logger.info(
-            f"Pyrogram session up: @{userbot.username} ({userbot.phone})")
+            f"Pyrogram session up: @{userbot.username} ({userbot.phone}) [IP: {actual_ip}]")
         return userbot
+
+
+async def get_client_ip(proxy_dict: dict | None = None) -> str:
+    import socks
+    import socket
+    import asyncio
+
+    def _fetch():
+        s = socks.socksocket()
+        if proxy_dict:
+            scheme_str = proxy_dict.get("scheme", "socks5").lower()
+            if scheme_str == "socks5":
+                proxy_type = socks.SOCKS5
+            elif scheme_str == "socks4":
+                proxy_type = socks.SOCKS4
+            else:
+                proxy_type = socks.HTTP
+                
+            s.set_proxy(
+                proxy_type=proxy_type,
+                addr=proxy_dict.get("hostname"),
+                port=proxy_dict.get("port"),
+                username=proxy_dict.get("username"),
+                password=proxy_dict.get("password")
+            )
+        s.settimeout(5.0)
+        try:
+            s.connect(("api.ipify.org", 80))
+            s.sendall(b"GET / HTTP/1.1\r\nHost: api.ipify.org\r\nConnection: close\r\n\r\n")
+            response = s.recv(1024)
+            s.close()
+            lines = response.decode("utf-8", errors="ignore").split("\r\n")
+            for line in reversed(lines):
+                if line.strip() and not line.startswith("HTTP/") and not ":" in line and not "Content-" in line:
+                    return line.strip()
+            return lines[-1].strip()
+        except Exception as e:
+            return f"failed ({e})"
+
+    return await asyncio.to_thread(_fetch)
 
     async def stop(self, account_id: str) -> None:
         userbot = self._clients.pop(account_id, None)

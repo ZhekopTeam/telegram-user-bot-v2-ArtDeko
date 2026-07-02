@@ -20,9 +20,28 @@ def is_admin(tg_id: int) -> bool:
     return tg_id in settings.admins_list
 
 
-async def _proxy_rows() -> list[tuple[str, str, str, str, int]]:
-    proxies = await ProxyRepository().get_all()
-    return [(p.id, p.name, p.proxy_type, p.host, p.port) for p in proxies]
+async def _proxy_rows() -> list[tuple[str, str, str, str, int, bool]]:
+    from utils.database.db_engine import get_session_factory
+    from utils.database.models import WarmupGroup
+    from sqlalchemy import select
+    from utils.logger import logger
+
+    repo = ProxyRepository()
+    proxies = await repo.get_all()
+
+    busy_proxy_ids = set()
+    try:
+        async with get_session_factory()() as session:
+            stmt = select(WarmupGroup.proxy_id).where(
+                WarmupGroup.proxy_id.is_not(None),
+                WarmupGroup.status.in_(["enabled", "paused"])
+            )
+            res = await session.execute(stmt)
+            busy_proxy_ids = set(res.scalars().all())
+    except Exception as e:
+        logger.error(f"Error checking busy proxies: {e}")
+
+    return [(p.id, p.name, p.proxy_type, p.host, p.port, p.id in busy_proxy_ids) for p in proxies]
 
 
 @router_proxy.callback_query(F.data == "menu:proxy")
@@ -52,12 +71,31 @@ async def cb_proxy_detail(callback: CallbackQuery) -> None:
         await callback.answer("Прокси не найден", show_alert=True)
         return
 
+    from utils.database.db_engine import get_session_factory
+    from utils.database.models import WarmupGroup
+    from sqlalchemy import select
+
+    group_name = None
+    try:
+        async with get_session_factory()() as session:
+            stmt = select(WarmupGroup.name).where(
+                WarmupGroup.proxy_id == proxy_id,
+                WarmupGroup.status.in_(["enabled", "paused"])
+            )
+            res = await session.execute(stmt)
+            group_name = res.scalars().first()
+    except Exception:
+        pass
+
+    status_str = f"🔴 Занят (Группа: <b>{group_name}</b>)" if group_name else "🟢 Свободен"
+
     decrypted_user = decrypt_session(proxy.username) if proxy.username else None
     auth = f"{decrypted_user}:***@" if decrypted_user else ""
     text = (
         f"🌐 <b>{proxy.name}</b>\n\n"
         f"Тип: <code>{proxy.proxy_type}</code>\n"
-        f"Адрес: <code>{auth}{proxy.host}:{proxy.port}</code>"
+        f"Адрес: <code>{auth}{proxy.host}:{proxy.port}</code>\n\n"
+        f"Статус: {status_str}"
     )
     await callback.message.edit_text(
         text, reply_markup=proxy_detail_kb(proxy.id))

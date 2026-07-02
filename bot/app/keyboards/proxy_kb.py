@@ -4,9 +4,10 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def proxy_list_kb(proxies: list) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    for proxy_id, name, ptype, host, port in proxies:
+    for proxy_id, name, ptype, host, port, is_busy in proxies:
+        status = "🔴" if is_busy else "🟢"
         builder.button(
-            text=f"🌐 {name} ({ptype}://{host}:{port})",
+            text=f"{status} {host}:{port}",
             callback_data=f"proxy_detail:{proxy_id}",
         )
     builder.button(text="➕ Добавить прокси", callback_data="proxy_add")

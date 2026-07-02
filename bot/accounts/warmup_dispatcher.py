@@ -100,7 +100,7 @@ class WarmupDispatcher:
         )
         self._scheduler.start()
         logger.info(
-            f"WarmupDispatcher armed: plan @ {settings.WARMUP_PLAN_HOUR:02d}:"
+            f"WarmupDispatcher armed: plan at {settings.WARMUP_PLAN_HOUR:02d}:"
             f"{settings.WARMUP_PLAN_MINUTE:02d}, "
             f"tick every {settings.WARMUP_DISPATCH_INTERVAL_SEC}s"
         )
@@ -221,8 +221,10 @@ class WarmupDispatcher:
             return
 
         await self._messages.mark_sent(msg.id, datetime.now(timezone.utc))
+        sender_ip = bot_client.ip if bot_client else "unknown"
+        receiver_ip = receiver_client.ip if receiver_client else "unknown"
         logger.info(
-            f"Sent msg {msg.id}: {sender.phone} → {receiver.phone} "
+            f"Sent msg {msg.id}: {sender.phone} [{sender_ip}] → {receiver.phone} [{receiver_ip}] "
             f"(pair={msg.pair_index} cycle={msg.cycle_index} dir={msg.direction})"
         )
 
