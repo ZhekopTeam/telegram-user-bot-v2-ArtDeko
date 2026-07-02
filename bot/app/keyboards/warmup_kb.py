@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, date
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from utils.session_repo import mask_phone
+from utils import SessionRepository
 
 MAX_ACCOUNTS_PER_GROUP = 6
 
@@ -57,14 +57,14 @@ def accounts_multipick_kb(
             continue
         if account_id in selected:
             pos = selected.index(account_id) + 1
-            label = f"✅ {pos}. {mask_phone(phone)}"
+            label = f"✅ {pos}. {SessionRepository.mask_phone(phone)}"
             builder.button(
                 text=label,
                 callback_data=f"pick_acc:{account_id}",
             )
         elif not at_limit:
             builder.button(
-                text=mask_phone(phone),
+                text=SessionRepository.mask_phone(phone),
                 callback_data=f"pick_acc:{account_id}",
             )
     if len(selected) >= 2:

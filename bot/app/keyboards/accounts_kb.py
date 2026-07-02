@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from utils.session_repo import mask_phone
+from utils import SessionRepository
 
 
 def build_code_message(code: str) -> str:
@@ -19,7 +19,7 @@ def accounts_list_kb(accounts: list[tuple[str, str, str]]) -> InlineKeyboardMark
         else:
             prefix = "⚠️ "
         builder.button(
-            text=f"{prefix}{mask_phone(phone)}",
+            text=f"{prefix}{SessionRepository.mask_phone(phone)}",
             callback_data=f"account:{account_id}",
         )
     builder.button(text="➕ Добавить аккаунт", callback_data="add_account")

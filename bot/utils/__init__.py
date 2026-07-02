@@ -5,6 +5,7 @@ from .middlewares import CommandPriorityMiddleware
 from .session_repo import SessionRepository
 from .sheets_sync import SheetsSync
 from .bot_notifications import BotNotifications
+from .creation import CreationHelpers
 
 __all__ = [
     "AddAccount",
@@ -15,4 +16,5 @@ __all__ = [
     "SessionRepository",
     "SheetsSync",
     "BotNotifications",
+    "CreationHelpers",
 ]

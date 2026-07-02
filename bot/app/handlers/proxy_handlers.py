@@ -98,12 +98,50 @@ async def cb_proxy_add(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-_PROXY_RE = re.compile(
-    r"^(socks5|socks4|http)://"
-    r"(?:([^:]+):([^@]+)@)?"
-    r"([^:]+):(\d+)$",
-    re.IGNORECASE,
-)
+def parse_proxy(text: str) -> dict | None:
+    text = text.strip()
+    
+    # 1. Extract protocol if present
+    ptype = "socks5"
+    prefix_match = re.match(r"^(socks5|socks4|http)(?::/+|[ \t]+)", text, re.IGNORECASE)
+    if prefix_match:
+        ptype = prefix_match.group(1).lower()
+        text = text[prefix_match.end():].strip()
+        
+    # 2. Try at-match (user:pass@host:port)
+    at_match = re.match(r"^([^:]+):([^@]+)@([^:]+):(\d+)$", text)
+    if at_match:
+        return {
+            "ptype": ptype,
+            "username": at_match.group(1),
+            "password": at_match.group(2),
+            "host": at_match.group(3),
+            "port": int(at_match.group(4))
+        }
+        
+    # 3. Try colon-4-match (host:port:user:pass)
+    colon_4_match = re.match(r"^([^:]+):(\d+):([^:]+):([^:]+)$", text)
+    if colon_4_match:
+        return {
+            "ptype": ptype,
+            "username": colon_4_match.group(3),
+            "password": colon_4_match.group(4),
+            "host": colon_4_match.group(1),
+            "port": int(colon_4_match.group(2))
+        }
+        
+    # 4. Try colon-2-match (host:port)
+    colon_2_match = re.match(r"^([^:]+):(\d+)$", text)
+    if colon_2_match:
+        return {
+            "ptype": ptype,
+            "username": None,
+            "password": None,
+            "host": colon_2_match.group(1),
+            "port": int(colon_2_match.group(2))
+        }
+        
+    return None
 
 
 @router_proxy.message(AddProxy.waiting_proxy_input)
@@ -111,20 +149,23 @@ async def msg_proxy_input(message: Message, state: FSMContext) -> None:
     if not is_admin(message.from_user.id):
         return
     text = message.text.strip()
-    m = _PROXY_RE.match(text)
-    if not m:
+    parsed = parse_proxy(text)
+    if not parsed:
         await message.answer(
             "❌ Неверный формат.\n"
-            "Пример: <code>socks5://user:pass@1.2.3.4:1080</code>",
+            "Вы можете ввести в одном из следующих форматов:\n"
+            "• <code>socks5://user:pass@host:port</code>\n"
+            "• <code>SOCKS5 host:port:user:pass</code>\n"
+            "• <code>host:port:user:pass</code>",
             reply_markup=proxy_cancel_kb(),
         )
         return
 
-    ptype = m.group(1).lower()
-    username = m.group(2)
-    password = m.group(3)
-    host = m.group(4)
-    port = int(m.group(5))
+    ptype = parsed["ptype"]
+    username = parsed["username"]
+    password = parsed["password"]
+    host = parsed["host"]
+    port = parsed["port"]
 
     name = f"{host}:{port}"
     
