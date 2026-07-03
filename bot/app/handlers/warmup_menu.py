@@ -155,7 +155,19 @@ async def cb_warmup_resume(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     group_id = callback.data.split(":", 1)[1]
-    await WarmupGroupRepository().set_status(group_id, "enabled")
+    group_repo = WarmupGroupRepository()
+    await group_repo.set_status(group_id, "enabled")
+
+    # Instantly trigger planning for today
+    from accounts.warmup_planner import WarmupPlanner
+    try:
+        group = await group_repo.get_by_id(group_id)
+        if group:
+            planner = WarmupPlanner()
+            await planner.plan_day(group, datetime.now().date())
+    except Exception as e:
+        logger.error(f"Failed to plan group {group_id} on resume: {e}")
+
     await SheetsSync.sync_warmup()
     await render_detail(callback, group_id)
     await callback.answer("▶️ Возобновлено")

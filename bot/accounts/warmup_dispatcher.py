@@ -224,7 +224,7 @@ class WarmupDispatcher:
         sender_ip = bot_client.ip if bot_client else "unknown"
         receiver_ip = receiver_client.ip if receiver_client else "unknown"
         logger.info(
-            f"Sent msg {msg.id}: {sender.phone} [{sender_ip}] → {receiver.phone} [{receiver_ip}] "
+            f"Group: {group.name}:Sent msg {msg.id}: {sender.phone} [{sender_ip}] → {receiver.phone} [{receiver_ip}] "
             f"(pair={msg.pair_index} cycle={msg.cycle_index} dir={msg.direction})"
         )
 

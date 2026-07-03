@@ -12,22 +12,11 @@ from utils.database import (
 
 
 class WarmupPlanner:
-    """Генерирует план запланированных сообщений на день для группы прогрева.
-
-    Цепочка строится циклически по позициям членов группы:
-    pairs = [(m[0], m[1]), (m[1], m[2]), ..., (m[N-1], m[0])]
-    Для каждой пары делается `cycles_per_pair` обменных циклов
-    (sender->receiver, затем receiver->sender со случайным интервалом).
-    Все события размещаются в окне [day_start_hour, day_end_hour] локального дня.
-    """
-
     def __init__(self) -> None:
         self._groups = WarmupGroupRepository()
         self._messages = ScheduledMessageRepository()
 
     async def plan_today_for_all(self, today: date) -> int:
-        """Планирует прогрев на сегодняшний день для всех активных групп.
-        Возвращает количество групп, для которых был сгенерирован план."""
         await self._groups.auto_finish_expired(today)
         groups = await self._groups.get_active_for_date(today)
         planned = 0

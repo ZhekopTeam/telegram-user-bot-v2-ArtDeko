@@ -52,10 +52,13 @@ class WarmupGroupRepository:
 
     async def set_status(self, group_id: str, status: str) -> None:
         async with get_session_factory()() as session:
+            values = {"status": status}
+            if status == "enabled":
+                values["last_planned_date"] = None
             await session.execute(
                 sa_update(WarmupGroup)
                 .where(WarmupGroup.id == group_id)
-                .values(status=status)
+                .values(**values)
             )
             await session.commit()
 

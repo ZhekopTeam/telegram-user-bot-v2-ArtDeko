@@ -98,6 +98,7 @@ class ClientManager:
             tg_id=account.tg_id,
             username=account.username or "",
             phone=account.phone,
+            ip=actual_ip,
         )
         self._clients[account_id] = userbot
         logger.info(
