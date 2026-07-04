@@ -1,6 +1,6 @@
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from aiogram import F, Router
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
 from config import settings
@@ -12,11 +12,15 @@ from utils.database import (
     AccountRepository,
     ProxyRepository,
 )
+from utils.FSM import AddWarmup
 from app.keyboards import (
     warmup_list_kb,
+    warmup_finished_list_kb,
     warmup_detail_kb,
     warmup_queue_kb,
+    warmup_extend_kb,
 )
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 router_warmup_menu = Router(name="warmup_menu")
 
@@ -102,11 +106,52 @@ async def cb_warmup_menu(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await state.clear()
     rows = await build_groups_view()
+    has_finished = any(r[2] == "finished" for r in rows)
     await callback.message.edit_text(
         await warmup_text(),
-        reply_markup=warmup_list_kb(rows),
+        reply_markup=warmup_list_kb(rows, show_finished_btn=has_finished),
     )
     await callback.answer()
+
+
+@router_warmup_menu.callback_query(F.data == "warmup_finished_list")
+async def cb_warmup_finished_list(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer()
+        return
+    rows = await build_groups_view()
+    await callback.message.edit_text(
+        "✅ <b>Завершённые группы прогрева</b>\n\n"
+        "Здесь отображаются группы, которые отработали весь период прогрева. "
+        "Перейдите в группу, чтобы подтвердить завершение и освободить аккаунты.",
+        reply_markup=warmup_finished_list_kb(rows),
+    )
+    await callback.answer()
+
+
+@router_warmup_menu.callback_query(F.data.startswith("warmup_complete:"))
+async def cb_warmup_complete(callback: CallbackQuery) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer()
+        return
+    group_id = callback.data.split(":", 1)[1]
+    repo = WarmupGroupRepository()
+    group = await repo.get_by_id(group_id)
+    group_name = group.name if group else "Без названия"
+    
+    await repo.delete(group_id)
+    await SheetsSync.sync_warmup()
+    
+    back_builder = InlineKeyboardBuilder()
+    back_builder.button(text="← К списку", callback_data="menu:warmup")
+    
+    await callback.message.edit_text(
+        f"🏁 <b>Успешно завершено!</b>\n\n"
+        f"Прогрев аккаунтов из группы <b>{group_name}</b> успешно завершён.\n"
+        f"Аккаунты освобождены от прогрева и доступны для дальнейших действий.",
+        reply_markup=back_builder.as_markup()
+    )
+    await callback.answer("🏁 Прогрев успешно завершён!")
 
 
 @router_warmup_menu.callback_query(F.data.startswith("warmup:"))
@@ -164,29 +209,137 @@ async def cb_warmup_resume(callback: CallbackQuery) -> None:
         group = await group_repo.get_by_id(group_id)
         if group:
             planner = WarmupPlanner()
-            await planner.plan_day(group, datetime.now().date())
+            await planner.resume_day(group, datetime.now().date())
     except Exception as e:
-        logger.error(f"Failed to plan group {group_id} on resume: {e}")
+        logger.error(f"Failed to resume group {group_id}: {e}")
 
     await SheetsSync.sync_warmup()
     await render_detail(callback, group_id)
     await callback.answer("▶️ Возобновлено")
 
 
-@router_warmup_menu.callback_query(F.data.startswith("warmup_del:"))
-async def cb_warmup_delete(callback: CallbackQuery, state: FSMContext) -> None:
+@router_warmup_menu.callback_query(F.data.startswith("warmup_extend:"))
+async def cb_warmup_extend(callback: CallbackQuery, state: FSMContext) -> None:
     if not is_admin(callback.from_user.id):
         await callback.answer()
         return
     group_id = callback.data.split(":", 1)[1]
-    await WarmupGroupRepository().delete(group_id)
-    await callback.answer("🗑 Удалено")
-    await SheetsSync.sync_warmup()
-    rows = await build_groups_view()
-    await callback.message.edit_text(
-        await warmup_text(),
-        reply_markup=warmup_list_kb(rows),
+    
+    await state.update_data(
+        extend_group_id=group_id,
+        bot_chat_id=callback.message.chat.id,
+        bot_message_id=callback.message.message_id,
     )
+    await state.set_state(AddWarmup.waiting_extend_days)
+    
+    await callback.message.edit_text(
+        "➕ <b>Продление прогрева</b>\n\n"
+        "Введите <b>количество дней</b>, на которое хотите продлить прогрев этой группы (число), или выберите вариант на кнопках ниже:",
+        reply_markup=warmup_extend_kb(group_id),
+    )
+    await callback.answer()
+
+
+@router_warmup_menu.callback_query(F.data.startswith("warmup_do_extend:"))
+async def cb_warmup_do_extend(callback: CallbackQuery, state: FSMContext) -> None:
+    if not is_admin(callback.from_user.id):
+        await callback.answer()
+        return
+    parts = callback.data.split(":")
+    group_id = parts[1]
+    days = int(parts[2])
+    
+    await state.clear()
+    
+    group_repo = WarmupGroupRepository()
+    group = await group_repo.get_by_id(group_id)
+    if group:
+        base_date = max(group.end_date, date.today())
+        new_end_date = base_date + timedelta(days=days)
+        await group_repo.extend_group(group_id, new_end_date)
+        
+        from accounts.warmup_planner import WarmupPlanner
+        try:
+            planner = WarmupPlanner()
+            await planner.resume_day(group, date.today())
+        except Exception as e:
+            logger.error(f"Failed to plan on extend: {e}")
+            
+    await SheetsSync.sync_warmup()
+    await render_detail(callback, group_id)
+    await callback.answer("➕ Прогрев успешно продлён!")
+
+
+@router_warmup_menu.message(AddWarmup.waiting_extend_days)
+async def msg_warmup_extend_days(message: Message, state: FSMContext) -> None:
+    if not is_admin(message.from_user.id):
+        return
+    
+    try:
+        await message.delete()
+    except Exception:
+        pass
+        
+    try:
+        days = int(message.text.strip())
+        if days < 1:
+            raise ValueError
+    except ValueError:
+        data = await state.get_data()
+        group_id = data["extend_group_id"]
+        from utils import CreationHelpers
+        await CreationHelpers.edit_bot_msg(
+            state,
+            "❌ Неверный формат. Введите положительное целое число дней (например, <code>5</code>):\n\n"
+            "Введите <b>количество дней</b>, на которое хотите продлить прогрев этой группы:",
+            reply_markup=warmup_extend_kb(group_id),
+        )
+        return
+        
+    data = await state.get_data()
+    group_id = data["extend_group_id"]
+    await state.clear()
+    
+    group_repo = WarmupGroupRepository()
+    group = await group_repo.get_by_id(group_id)
+    if group:
+        base_date = max(group.end_date, date.today())
+        new_end_date = base_date + timedelta(days=days)
+        await group_repo.extend_group(group_id, new_end_date)
+        
+        from accounts.warmup_planner import WarmupPlanner
+        try:
+            planner = WarmupPlanner()
+            await planner.resume_day(group, date.today())
+        except Exception as e:
+            logger.error(f"Failed to plan on extend: {e}")
+            
+    await SheetsSync.sync_warmup()
+    
+    class MockMessage:
+        def __init__(self, chat_id, message_id):
+            self.chat = type("Chat", (), {"id": chat_id})()
+            self.message_id = message_id
+        async def edit_text(self, text, reply_markup=None, **kwargs):
+            from config import bot as tg_bot
+            return await tg_bot.edit_message_text(
+                text=text,
+                chat_id=self.chat.id,
+                message_id=self.message_id,
+                reply_markup=reply_markup,
+            )
+            
+    class MockCallbackQuery:
+        def __init__(self, bot_msg, from_user):
+            self.message = bot_msg
+            self.from_user = from_user
+        async def answer(self, *args, **kwargs):
+            pass
+            
+    bot_msg = MockMessage(data["bot_chat_id"], data["bot_message_id"])
+    mock_cb = MockCallbackQuery(bot_msg, message.from_user)
+    await render_detail(mock_cb, group_id)
+
 
 
 @router_warmup_menu.callback_query(F.data.startswith("warmup_queue:"))

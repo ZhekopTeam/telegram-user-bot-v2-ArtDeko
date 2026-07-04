@@ -85,9 +85,52 @@ class WarmupPlanner:
         await self._messages.bulk_add(messages)
         await self._groups.set_last_planned(group.id, day)
         logger.info(
-            f"Planned {len(messages)} messages for group {group.id} on {day}"
+            f"Planner | Planned {len(messages)} messages | Group: {group.id[:8]} | Date: {day}"
         )
         return True
+
+    async def resume_day(self, group: WarmupGroup, day: date) -> bool:
+        # Define today's range in UTC
+        today_start_utc = datetime.combine(day, time.min).replace(tzinfo=timezone.utc)
+        today_end_utc = datetime.combine(day, time.max).replace(tzinfo=timezone.utc)
+
+        cancelled = await self._messages.get_cancelled_for_day(group.id, today_start_utc, today_end_utc)
+        if not cancelled:
+            # If no cancelled messages exist for today, plan the day normally
+            return await self.plan_day(group, day)
+
+        now_utc = datetime.now(timezone.utc)
+        cursor = now_utc + timedelta(seconds=30)
+        day_end_local = datetime.combine(day, time(hour=group.day_end_hour))
+        day_end_utc = day_end_local.astimezone(timezone.utc)
+
+        # Sort by pair_index, cycle_index, direction (so we keep the correct order)
+        # Note: direction 'forward' should come before 'reply'
+        cancelled.sort(key=lambda m: (m.pair_index, m.cycle_index, 0 if m.direction == "forward" else 1))
+
+        updated_messages = []
+        for msg in cancelled:
+            if cursor >= day_end_utc:
+                logger.warning(f"Group {group.id} resume: day window exhausted during rescheduling")
+                break
+
+            msg.run_at = cursor
+            msg.status = "pending"
+            msg.attempts = 0
+            msg.last_error = None
+            updated_messages.append(msg)
+
+            cursor += timedelta(minutes=random.randint(
+                group.min_interval_min, group.max_interval_min))
+
+        if updated_messages:
+            await self._messages.bulk_update_rescheduled(updated_messages)
+            logger.info(
+                f"Planner | Rescheduled {len(updated_messages)} messages | Group: {group.id[:8]} | Start: {now_utc}"
+            )
+            return True
+
+        return False
 
     @staticmethod
     def _build_msg(

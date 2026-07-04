@@ -8,6 +8,8 @@ An enterprise-grade Telegram automation solution designed to warm up multiple Te
 *   **Secure Authentication Keypad** – Complete registration flow for new user-bots right within the admin Telegram chat, featuring a custom numeric keypad for entering 2FA/login codes safely.
 *   **Encrypted Pyrogram Session Storage** – Eliminates standard plain-text `.session` files on disk. Pyrogram session strings are encrypted using **Fernet (AES-128 in CBC mode)** with a custom master key and stored securely in an SQLite database.
 *   **Dynamic Chat Simulation** – Organizes user-bots into cyclic communication chains (e.g., Account A ➔ Account B ➔ Account C ➔ Account A) to chat naturally using randomized delays, text variations, and custom daily active hours.
+*   **🌐 Proxy Management** – Register and manage SOCKS4/SOCKS5/HTTP proxies with built-in load balancing. You can assign one proxy to up to 6 warmup accounts to maintain safe network boundaries.
+*   **✅ Completed Warmups Archive** – Warmup groups that complete all daily scheduled tasks by their end date are moved silently to a dedicated "Completed" (Завершено) screen. Admins can audit them and click "Finish" to release accounts for other tasks.
 *   **Google Sheets Integration** – Automatically exports real-time status tables for registered accounts and active warmup tasks so project owners or clients can monitor progress externally.
 *   **Docker & Docker-Compose Ready** – Packaged with a multi-stage Docker build for minimal image size and instant deployment.
 
@@ -143,6 +145,17 @@ Once the bot is running, send the `/start` command from an authorized admin acco
 *   Inside the **Warmup Details** menu, admins can pause, resume, or delete warmup tasks.
 *   Click **📋 Queue** to preview the next 15 scheduled messages, including the exact timestamps and participating accounts.
 *   If configured, the bot will periodically export the list of active accounts and group stats to your Google Sheets tables.
+
+### Step 5: Proxy Management
+1. Click **🌐 Proxies** in the main menu to view active proxies and their status.
+2. Click **➕ Add Proxy** and enter your connection string in any format (e.g. `socks5://user:pass@host:port` or `host:port:user:pass`).
+3. Choose a friendly name for the proxy (e.g. `US-Proxy-1`).
+4. To link a proxy to a warmup group, select it from the available lists. Proxies will show load indicators (e.g., `[3/6]`) and will automatically become unavailable when 6 accounts are assigned to them to prevent rate limiting.
+
+### Step 6: Completed Warmups Archive
+1. When all scheduled messages for a warmup group have run and the end date is reached, the group status changes to `"finished"`.
+2. The group will disappear from the active warmup list and move silently to the **✅ Завершено** section.
+3. Click **✅ Завершено** from the Warmup menu, select the finished group, and click **🏁 Завершить**. The group will be archived, and the accounts will be released and marked as available for other activities.
 
 ## 🔒 Security Practices
 

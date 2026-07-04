@@ -52,7 +52,7 @@ def _sync_accounts_blocking() -> None:
     ss = gc.open_by_key(settings.SPREADSHEET_ID)
     ws = _ensure_sheet(ss, settings.SHEET_ACCOUNTS)
     _write_sheet(ws, settings.ACCOUNTS_HEADER, rows)
-    logger.info(f"Sheets: synced {len(rows)} accounts")
+    logger.info(f"Sheets Sync | Accounts: {len(rows)}")
 
 
 def _sync_warmup_blocking() -> None:
@@ -87,7 +87,7 @@ def _sync_warmup_blocking() -> None:
     ss = gc.open_by_key(settings.SPREADSHEET_ID)
     ws = _ensure_sheet(ss, settings.SHEET_COMMUNICATIONS)
     _write_sheet(ws, settings.COMMS_HEADER, rows)
-    logger.info(f"Sheets: synced {len(rows)} warmup groups")
+    logger.info(f"Sheets Sync | Warmup Groups: {len(rows)}")
 
 
 async def _run_blocking(fn) -> None:

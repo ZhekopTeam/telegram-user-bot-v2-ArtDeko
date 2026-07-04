@@ -42,18 +42,23 @@ async def init_db() -> None:
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         
-        # SQLite migration: add proxy_id column to warmup_groups if it doesn't exist
+        # SQLite migration: add proxy_id and admin_tg_id columns to warmup_groups if they don't exist
         try:
             from sqlalchemy import text
             res = await conn.execute(text("PRAGMA table_info(warmup_groups)"))
             columns = [row[1] for row in res.fetchall()]
+            from utils.logger import logger
             if "proxy_id" not in columns:
                 await conn.execute(text(
                     "ALTER TABLE warmup_groups ADD COLUMN proxy_id VARCHAR(36) "
                     "REFERENCES proxies(id) ON DELETE SET NULL"
                 ))
-                from utils.logger import logger
                 logger.info("Database migration: added proxy_id column to warmup_groups table.")
+            if "admin_tg_id" not in columns:
+                await conn.execute(text(
+                    "ALTER TABLE warmup_groups ADD COLUMN admin_tg_id BIGINT"
+                ))
+                logger.info("Database migration: added admin_tg_id column to warmup_groups table.")
         except Exception as e:
             from utils.logger import logger
-            logger.error(f"Failed to migrate database (add proxy_id column): {e}")
+            logger.error(f"Failed to migrate database (add proxy_id / admin_tg_id column): {e}")

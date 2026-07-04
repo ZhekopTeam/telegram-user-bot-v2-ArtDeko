@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from uuid import uuid4
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
@@ -155,30 +155,29 @@ async def cb_start_date_pick(callback: CallbackQuery, state: FSMContext) -> None
     await state.update_data(start_date=d.isoformat())
     await state.set_state(AddWarmup.waiting_end_date)
     await callback.message.edit_text(
-        "Теперь введите <b>дату окончания</b> в формате <code>дд.мм.гггг</code>:",
+        "Теперь введите <b>количество дней</b> прогрева (число) или выберите из списка:",
         reply_markup=warmup_end_date_kb(d),
     )
     await callback.answer()
 
 
 @router_warmup_perfect.callback_query(
-    F.data.startswith("warmup_end_date:"),
+    F.data.startswith("warmup_days:"),
     AddWarmup.waiting_end_date,
 )
-async def cb_end_date_pick(callback: CallbackQuery, state: FSMContext) -> None:
+async def cb_end_days_pick(callback: CallbackQuery, state: FSMContext) -> None:
     if not CreationHelpers.is_admin(callback.from_user.id):
         await callback.answer()
         return
-    date_val = callback.data.split(":", 1)[1]
-    if date_val == "other":
-        await callback.message.edit_reply_markup(reply_markup=warmup_cancel_kb())
-        await callback.answer()
-        return
+    days_val = callback.data.split(":", 1)[1]
     try:
-        end_date = datetime.strptime(date_val, "%d.%m.%Y").date()
+        days = int(days_val)
     except ValueError:
-        await callback.answer("Ошибка формата даты", show_alert=True)
+        await callback.answer("Неверное число дней", show_alert=True)
         return
+    data = await state.get_data()
+    start_date = date.fromisoformat(data["start_date"])
+    end_date = start_date + timedelta(days=days)
     await CreationHelpers.proceed_to_proxy(callback, state, end_date)
     await callback.answer()
 
@@ -223,11 +222,12 @@ async def cb_confirm_ok(callback: CallbackQuery, state: FSMContext) -> None:
         max_interval_min=settings.WARMUP_MAX_INTERVAL_MIN,
         day_start_hour=settings.WARMUP_DAY_START_HOUR,
         day_end_hour=settings.WARMUP_DAY_END_HOUR,
+        admin_tg_id=callback.from_user.id,
     )
     await WarmupGroupRepository().add(group, selected)
     logger.info(
-        f"Warmup group {group.id} '{group.name}' added by {callback.from_user.id}: "
-        f"{len(selected)} accounts, {start_date}—{end_date}, proxy={proxy_id}"
+        f"Group added | ID: {group.id[:8]} | Name: {group.name} | Admin: {callback.from_user.id} | "
+        f"Accounts: {len(selected)} | Period: {start_date}—{end_date} | Proxy: {proxy_id}"
     )
 
     today = datetime.now().date()

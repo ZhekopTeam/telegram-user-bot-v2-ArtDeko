@@ -18,6 +18,8 @@ class AddWarmup(StatesGroup):
     waiting_edit_start_date = State()
     waiting_edit_end_date = State()
     waiting_edit_days = State()
+    waiting_extend_days = State()
+
 
 
 class AddProxy(StatesGroup):

@@ -18,8 +18,6 @@ class UserBotClient:
 
 
 class ClientManager:
-    """Управляет пулом Pyrogram-клиентов, поднятых из шифрованных сессий БД."""
-
     def __init__(self, bot: Bot):
         self._bot = bot
         self._clients: dict[str, UserBotClient] = {}
@@ -37,7 +35,6 @@ class ClientManager:
         if not account or account.status != "active":
             return None
 
-        # Check if the account belongs to an active warmup group with a proxy
         from utils.database.db_engine import get_session_factory
         from utils.database.models import WarmupGroup, WarmupGroupMember, Proxy
         from sqlalchemy import select
@@ -69,7 +66,6 @@ class ClientManager:
         except Exception as e:
             logger.warning(f"Failed to check proxy for account {account_id}: {e}")
 
-        # Check and log external IP address
         actual_ip = await get_client_ip(proxy_dict)
         proxy_desc = f"{proxy_dict['scheme']}://{proxy_dict['hostname']}:{proxy_dict['port']}" if proxy_dict else "direct connection"
         logger.info(f"Checking IP for account {account.phone} using {proxy_desc} -> External IP: {actual_ip}")

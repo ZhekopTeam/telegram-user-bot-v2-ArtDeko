@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from config import settings
 from utils.FSM import AddProxy
 from utils.database import Proxy, ProxyRepository, encrypt_session, decrypt_session
+from utils import CreationHelpers
 from app.keyboards import (
     proxy_list_kb,
     proxy_detail_kb,
@@ -123,6 +124,10 @@ async def cb_proxy_add(callback: CallbackQuery, state: FSMContext) -> None:
     if not is_admin(callback.from_user.id):
         await callback.answer()
         return
+    await state.update_data(
+        bot_chat_id=callback.message.chat.id,
+        bot_message_id=callback.message.message_id
+    )
     await state.set_state(AddProxy.waiting_proxy_input)
     await callback.message.edit_text(
         "Введите прокси в формате:\n"
@@ -186,10 +191,12 @@ def parse_proxy(text: str) -> dict | None:
 async def msg_proxy_input(message: Message, state: FSMContext) -> None:
     if not is_admin(message.from_user.id):
         return
+    await CreationHelpers.try_delete(message)
     text = message.text.strip()
     parsed = parse_proxy(text)
     if not parsed:
-        await message.answer(
+        await CreationHelpers.edit_bot_msg(
+            state,
             "❌ Неверный формат.\n"
             "Вы можете ввести в одном из следующих форматов:\n"
             "• <code>socks5://user:pass@host:port</code>\n"
@@ -204,6 +211,16 @@ async def msg_proxy_input(message: Message, state: FSMContext) -> None:
     password = parsed["password"]
     host = parsed["host"]
     port = parsed["port"]
+
+    existing = await ProxyRepository().get_all()
+    if any(p.host == host and p.port == port for p in existing):
+        await CreationHelpers.edit_bot_msg(
+            state,
+            f"❌ Прокси с адресом <code>{host}:{port}</code> уже существует!\n\n"
+            "Введите другой прокси или отмените:",
+            reply_markup=proxy_cancel_kb(),
+        )
+        return
 
     name = f"{host}:{port}"
     
@@ -224,4 +241,4 @@ async def msg_proxy_input(message: Message, state: FSMContext) -> None:
 
     rows = await _proxy_rows()
     text_msg = f"✅ Прокси добавлен!\n\n🌐 <b>Прокси</b> ({len(rows)}):"
-    await message.answer(text_msg, reply_markup=proxy_list_kb(rows))
+    await CreationHelpers.edit_bot_msg(state, text_msg, reply_markup=proxy_list_kb(rows))

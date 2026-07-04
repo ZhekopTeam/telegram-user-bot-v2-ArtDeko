@@ -75,6 +75,7 @@ class WarmupGroup(Base):
     day_end_hour: Mapped[int] = mapped_column(
         Integer, default=22, nullable=False)
     last_planned_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    admin_tg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

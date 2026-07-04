@@ -87,6 +87,16 @@ class WarmupGroupRepository:
             await session.commit()
             return result.rowcount > 0
 
+    async def extend_group(self, group_id: str, new_end_date: date) -> None:
+        async with get_session_factory()() as session:
+            await session.execute(
+                sa_update(WarmupGroup)
+                .where(WarmupGroup.id == group_id)
+                .values(end_date=new_end_date, status="enabled")
+            )
+            await session.commit()
+
+
     async def get_account_ids_in_active_groups(self) -> set[str]:
         async with get_session_factory()() as session:
             result = await session.execute(
@@ -224,3 +234,45 @@ class ScheduledMessageRepository:
             )
             await session.commit()
             return result.rowcount
+
+    async def has_pending_messages(self, group_id: str) -> bool:
+        async with get_session_factory()() as session:
+            result = await session.execute(
+                select(ScheduledMessage)
+                .where(
+                    ScheduledMessage.group_id == group_id,
+                    ScheduledMessage.status == "pending",
+                )
+                .limit(1)
+            )
+            return result.scalar_one_or_none() is not None
+
+    async def get_cancelled_for_day(
+        self, group_id: str, start_dt: datetime, end_dt: datetime
+    ) -> list[ScheduledMessage]:
+        async with get_session_factory()() as session:
+            result = await session.execute(
+                select(ScheduledMessage)
+                .where(
+                    ScheduledMessage.group_id == group_id,
+                    ScheduledMessage.status == "cancelled",
+                    ScheduledMessage.run_at >= start_dt,
+                    ScheduledMessage.run_at <= end_dt,
+                )
+            )
+            return list(result.scalars().all())
+
+    async def bulk_update_rescheduled(self, messages: list[ScheduledMessage]) -> None:
+        async with get_session_factory()() as session:
+            for msg in messages:
+                await session.execute(
+                    sa_update(ScheduledMessage)
+                    .where(ScheduledMessage.id == msg.id)
+                    .values(
+                        run_at=msg.run_at,
+                        status=msg.status,
+                        attempts=msg.attempts,
+                        last_error=msg.last_error,
+                    )
+                )
+            await session.commit()

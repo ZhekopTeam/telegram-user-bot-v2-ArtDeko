@@ -11,6 +11,7 @@ from .accounts_kb import (
 )
 from .warmup_kb import (
     warmup_list_kb,
+    warmup_finished_list_kb,
     warmup_detail_kb,
     warmup_queue_kb,
     accounts_multipick_kb,
@@ -21,6 +22,7 @@ from .warmup_kb import (
     warmup_no_proxy_warning_kb,
     warmup_confirm_kb,
     warmup_edit_kb,
+    warmup_extend_kb,
 )
 from .proxy_kb import (
     proxy_list_kb,

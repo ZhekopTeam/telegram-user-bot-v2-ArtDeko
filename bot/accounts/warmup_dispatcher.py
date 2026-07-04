@@ -26,7 +26,7 @@ from utils.database import (
     ScheduledMessage,
     WarmupGroupRepository,
 )
-from utils import BotNotifications
+from utils import BotNotifications, SheetsSync
 from accounts.client_manager import ClientManager
 from accounts.warmup_planner import WarmupPlanner
 
@@ -151,6 +151,7 @@ class WarmupDispatcher:
                 await self._messages.mark_failed(msg.id, "day window expired")
                 logger.debug(
                     f"Cancelled stale msg {msg.id[:8]} (scheduled for {msg_date_local})")
+                await self._check_group_finished(group)
                 return
             day_end_today = now_local.replace(
                 hour=group.day_end_hour, minute=0, second=0, microsecond=0)
@@ -158,6 +159,7 @@ class WarmupDispatcher:
                 await self._messages.mark_failed(msg.id, "day window expired")
                 logger.debug(
                     f"Cancelled msg {msg.id[:8]}: past day_end_hour ({group.day_end_hour}:00)")
+                await self._check_group_finished(group)
                 return
 
         sender = await self._accounts.get_by_id(msg.sender_id)
@@ -173,6 +175,7 @@ class WarmupDispatcher:
                 f"inactive: {sender.phone}={sender.status}, "
                 f"{receiver.phone}={receiver.status}",
             )
+            await self._check_group_finished(group)
             return
 
         bot_client = await self._cm.get_or_start(sender.id)
@@ -214,6 +217,7 @@ class WarmupDispatcher:
                 self._bot, sender.tg_id, sender.phone, type(e).__name__)
             await self._cm.stop(sender.id)
             await self._messages.mark_failed(msg.id, f"session: {type(e).__name__}")
+            await self._check_group_finished(group)
             return
         except Exception as e:
             await self._reschedule_or_fail(
@@ -224,9 +228,11 @@ class WarmupDispatcher:
         sender_ip = bot_client.ip if bot_client else "unknown"
         receiver_ip = receiver_client.ip if receiver_client else "unknown"
         logger.info(
-            f"Group: {group.name}:Sent msg {msg.id}: {sender.phone} [{sender_ip}] → {receiver.phone} [{receiver_ip}] "
-            f"(pair={msg.pair_index} cycle={msg.cycle_index} dir={msg.direction})"
+            f"Sent msg {msg.id[:8]} | Group: {group.name} | "
+            f"{sender.phone} [{sender_ip}] → {receiver.phone} [{receiver_ip}] | "
+            f"pair={msg.pair_index} | cycle={msg.cycle_index} | dir={msg.direction}"
         )
+        await self._check_group_finished(group)
 
     async def _reschedule_or_fail(self, msg: ScheduledMessage, error: str) -> None:
         if msg.attempts + 1 >= _MAX_ATTEMPTS:
@@ -237,6 +243,8 @@ class WarmupDispatcher:
                 f"🆔 <code>{msg.id[:8]}</code>\n"
                 f"💬 {error}",
             )
+            group = await self._groups.get_by_id(msg.group_id)
+            await self._check_group_finished(group)
             return
         backoff_min = 5 * (2 ** msg.attempts)
         new_run_at = datetime.now(timezone.utc) + \
@@ -245,3 +253,17 @@ class WarmupDispatcher:
         logger.warning(
             f"Rescheduled msg {msg.id} in {backoff_min}m (attempt {msg.attempts + 1}): {error}"
         )
+
+    async def _check_group_finished(self, group) -> None:
+        if not group:
+            return
+        has_pending = await self._messages.has_pending_messages(group.id)
+        if not has_pending:
+            today = datetime.now().date()
+            if today >= group.end_date:
+                await self._groups.set_status(group.id, "finished")
+                logger.info(f"Warmup group {group.name} ({group.id}) has finished all warmup tasks!")
+                try:
+                    await SheetsSync.sync_warmup()
+                except Exception as e:
+                    logger.error(f"Sheets sync failed on group finish: {e}")

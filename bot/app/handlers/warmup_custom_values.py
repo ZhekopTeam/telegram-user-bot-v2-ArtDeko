@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
@@ -32,7 +32,7 @@ async def msg_start_date(message: Message, state: FSMContext) -> None:
     await state.set_state(AddWarmup.waiting_end_date)
     await CreationHelpers.edit_bot_msg(
         state,
-        "Теперь введите <b>дату окончания</b> в формате <code>дд.мм.гггг</code>:",
+        "Теперь введите <b>количество дней</b> прогрева (число) или выберите из списка:",
         reply_markup=warmup_end_date_kb(d),
     )
 
@@ -43,15 +43,20 @@ async def msg_end_date(message: Message, state: FSMContext) -> None:
         return
     await CreationHelpers.try_delete(message)
     try:
-        end_date = datetime.strptime(message.text.strip(), "%d.%m.%Y").date()
+        days = int(message.text.strip())
+        if days < 1:
+            raise ValueError
     except ValueError:
         data = await state.get_data()
         start_date = date.fromisoformat(data["start_date"])
         await CreationHelpers.edit_bot_msg(
             state,
-            "❌ Неверный формат. Пример: <code>30.06.2026</code>\n\n"
-            "Введите <b>дату окончания</b> в формате <code>дд.мм.гггг</code>:",
+            "❌ Неверный формат. Введите положительное число дней (например, <code>7</code>):\n\n"
+            "Введите <b>количество дней</b> прогрева:",
             reply_markup=warmup_end_date_kb(start_date),
         )
         return
+    data = await state.get_data()
+    start_date = date.fromisoformat(data["start_date"])
+    end_date = start_date + timedelta(days=days)
     await CreationHelpers.proceed_to_proxy(message, state, end_date)
