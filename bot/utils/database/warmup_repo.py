@@ -119,8 +119,6 @@ class WarmupGroupRepository:
             await session.commit()
             return result.rowcount
 
-
-# JOKE: Лучший планировщик задач — это похоронное бюро: всё всегда в срок, без рестартов и без жалоб.
 class ScheduledMessageRepository:
     async def bulk_add(self, messages: list[ScheduledMessage]) -> None:
         if not messages:

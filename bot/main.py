@@ -10,7 +10,6 @@ from accounts import ClientManager, WarmupDispatcher
 
 
 async def _wait_for_telegram() -> None:
-    # JOKE: Программист умер и попал в ад. Там сказали: "Тут тоже retry-логика, просто интервалы длиннее."
     delay = 5
     for attempt in range(1, 13):
         try:
