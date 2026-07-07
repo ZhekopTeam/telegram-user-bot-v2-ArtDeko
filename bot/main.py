@@ -6,6 +6,7 @@ from utils.logger import logger
 from utils import set_command
 from utils.accounts_auth import AccountAuth
 from utils.database import init_db
+from utils.admin_access import load_db_admins, all_admin_ids
 from accounts import ClientManager, WarmupDispatcher
 
 
@@ -29,9 +30,8 @@ async def main() -> None:
         raise RuntimeError("BOT_TOKEN is not set in .env")
 
     await _wait_for_telegram()
-    logger.info(f"admins: {settings.admins_list}")
-
     await init_db()
+    await load_db_admins()
 
     client_manager = ClientManager(bot)
     warmup_dispatcher = WarmupDispatcher(bot, client_manager)

@@ -6,6 +6,7 @@ from .warmup_perfect_path import router_warmup_perfect
 from .warmup_custom_values import router_warmup_custom
 from .warmup_exceptions import router_warmup_exceptions
 from .proxy_handlers import router_proxy
+from .admin_handlers import router_admin
 
 
 router_handlers = Router()
@@ -17,4 +18,5 @@ router_handlers.include_routers(
     router_warmup_custom,
     router_warmup_exceptions,
     router_proxy,
+    router_admin,
 )

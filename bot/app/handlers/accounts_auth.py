@@ -3,10 +3,10 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
 
-from config import settings
 from utils.accounts_auth import AccountAuth
 from utils.FSM import AddAccount
 from utils.logger import logger
+from utils.admin_access import is_admin
 from utils import SessionRepository, SheetsSync
 from app.keyboards import (
     build_code_message,
@@ -16,10 +16,6 @@ from app.keyboards import (
 )
 
 router_accounts = Router(name="accounts")
-
-
-def is_admin(tg_id: int) -> bool:
-    return tg_id in settings.admins_list
 
 
 @router_accounts.callback_query(F.data == "add_account")

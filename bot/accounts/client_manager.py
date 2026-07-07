@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 from aiogram import Bot
 from pyrogram import Client
+from pyrogram.errors import AuthKeyUnregistered, UserDeactivated, SessionRevoked
 from utils.logger import logger
 from config import settings
 from utils.database import AccountRepository, decrypt_session
 from utils import BotNotifications
+
+_FATAL_SESSION_ERRORS = (AuthKeyUnregistered, UserDeactivated, SessionRevoked)
 
 
 @dataclass
@@ -81,11 +84,20 @@ class ClientManager:
                 proxy=proxy_dict,
             )
             await client.start()
-        except Exception as e:
-            logger.error(f"Cannot start client for {account.phone}: {e}")
+        except _FATAL_SESSION_ERRORS as e:
+            logger.error(f"Session revoked for {account.phone}: {type(e).__name__}")
             await BotNotifications.notify_session_revoked(
                 self._bot, account.tg_id, account.phone, type(e).__name__
             )
+            return None
+        except OSError as e:
+            logger.warning(
+                f"Network/proxy error starting client for {account.phone} "
+                f"(proxy: {proxy_desc}): {e}"
+            )
+            return None
+        except Exception as e:
+            logger.error(f"Cannot start client for {account.phone}: {type(e).__name__}: {e}")
             return None
 
         userbot = UserBotClient(
@@ -100,6 +112,19 @@ class ClientManager:
         logger.info(
             f"Pyrogram session up: @{userbot.username} ({userbot.phone}) [IP: {actual_ip}]")
         return userbot
+
+    async def stop(self, account_id: str) -> None:
+        userbot = self._clients.pop(account_id, None)
+        if userbot is None:
+            return
+        try:
+            await userbot.client.stop()
+        except Exception:
+            pass
+
+    async def stop_all(self) -> None:
+        for account_id in list(self._clients.keys()):
+            await self.stop(account_id)
 
 
 async def get_client_ip(proxy_dict: dict | None = None) -> str:
@@ -140,16 +165,3 @@ async def get_client_ip(proxy_dict: dict | None = None) -> str:
             return f"failed ({e})"
 
     return await asyncio.to_thread(_fetch)
-
-    async def stop(self, account_id: str) -> None:
-        userbot = self._clients.pop(account_id, None)
-        if userbot is None:
-            return
-        try:
-            await userbot.client.stop()
-        except Exception:
-            pass
-
-    async def stop_all(self) -> None:
-        for account_id in list(self._clients.keys()):
-            await self.stop(account_id)

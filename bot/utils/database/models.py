@@ -16,6 +16,16 @@ class Base(DeclarativeBase):
     pass
 
 
+class BotAdmin(Base):
+    __tablename__ = "bot_admins"
+
+    tg_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
 class Account(Base):
     __tablename__ = "accounts"
 

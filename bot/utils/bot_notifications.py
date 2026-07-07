@@ -1,5 +1,5 @@
 from aiogram import Bot
-from config import settings
+from utils.admin_access import all_admin_ids
 from utils.database import AccountRepository
 from utils.logger import logger
 
@@ -22,7 +22,7 @@ class BotNotifications:
         )
 
         target = account.admin_tg_id if account and account.admin_tg_id else None
-        recipients = [target] if target else settings.admins_list
+        recipients = [target] if target else all_admin_ids()
 
         for admin_id in recipients:
             try:
@@ -33,7 +33,7 @@ class BotNotifications:
     @classmethod
     async def notify_admins(cls, bot: Bot, text: str) -> None:
         """Отправить сообщение всем админам из .env."""
-        for admin_id in settings.admins_list:
+        for admin_id in all_admin_ids():
             try:
                 await bot.send_message(admin_id, text)
             except Exception as e:

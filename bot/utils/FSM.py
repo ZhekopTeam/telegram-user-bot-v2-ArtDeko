@@ -24,3 +24,7 @@ class AddWarmup(StatesGroup):
 
 class AddProxy(StatesGroup):
     waiting_proxy_input = State()
+
+
+class AddAdmin(StatesGroup):
+    waiting_tg_id = State()

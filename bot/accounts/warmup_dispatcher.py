@@ -203,6 +203,10 @@ class WarmupDispatcher:
                 except Exception as e:
                     logger.debug(
                         f"read_chat_history failed for {receiver.phone}: {e}")
+            else:
+                logger.warning(
+                    f"Receiver {receiver.phone} could not connect — read_chat_history skipped"
+                )
         except FloodWait as e:
             wait_sec = getattr(e, "value", 60) or 60
             new_run_at = datetime.now(timezone.utc) + \
@@ -228,9 +232,10 @@ class WarmupDispatcher:
         sender_ip = bot_client.ip if bot_client else "unknown"
         receiver_ip = receiver_client.ip if receiver_client else "unknown"
         logger.info(
-            f"Sent msg {msg.id[:8]} | Group: {group.name} | "
-            f"{sender.phone} [{sender_ip}] → {receiver.phone} [{receiver_ip}] | "
-            f"pair={msg.pair_index} | cycle={msg.cycle_index} | dir={msg.direction}"
+            f"Sent msg {msg.id[:8]} | "
+            f"Group: {group.name:<16} | "
+            f"{sender.phone} [{sender_ip:<15}] → {receiver.phone} [{receiver_ip:<15}] | "
+            f"pair={msg.pair_index:<2} | cycle={msg.cycle_index:<2} | dir={msg.direction:<7}"
         )
         await self._check_group_finished(group)
 

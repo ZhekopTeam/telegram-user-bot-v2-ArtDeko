@@ -90,13 +90,11 @@ class WarmupPlanner:
         return True
 
     async def resume_day(self, group: WarmupGroup, day: date) -> bool:
-        # Define today's range in UTC
         today_start_utc = datetime.combine(day, time.min).replace(tzinfo=timezone.utc)
         today_end_utc = datetime.combine(day, time.max).replace(tzinfo=timezone.utc)
 
         cancelled = await self._messages.get_cancelled_for_day(group.id, today_start_utc, today_end_utc)
         if not cancelled:
-            # If no cancelled messages exist for today, plan the day normally
             return await self.plan_day(group, day)
 
         now_utc = datetime.now(timezone.utc)
@@ -104,8 +102,6 @@ class WarmupPlanner:
         day_end_local = datetime.combine(day, time(hour=group.day_end_hour))
         day_end_utc = day_end_local.astimezone(timezone.utc)
 
-        # Sort by pair_index, cycle_index, direction (so we keep the correct order)
-        # Note: direction 'forward' should come before 'reply'
         cancelled.sort(key=lambda m: (m.pair_index, m.cycle_index, 0 if m.direction == "forward" else 1))
 
         updated_messages = []

@@ -2,8 +2,8 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from config import settings
 from utils import SessionRepository, SheetsSync
+from utils.admin_access import is_admin, is_owner
 from app.keyboards import (
     main_menu_kb,
     accounts_list_kb,
@@ -12,10 +12,6 @@ from app.keyboards import (
 from utils.logger import logger
 
 router_repo = Router(name="repo")
-
-
-def is_admin(tg_id: int) -> bool:
-    return tg_id in settings.admins_list
 
 
 def _menu_text() -> str:
@@ -38,7 +34,10 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     if not is_admin(message.from_user.id):
         return
     await state.clear()
-    await message.answer(_menu_text(), reply_markup=main_menu_kb())
+    await message.answer(
+        _menu_text(),
+        reply_markup=main_menu_kb(show_admins=is_owner(message.from_user.id)),
+    )
 
 
 @router_repo.callback_query(F.data == "menu:main")
@@ -47,7 +46,10 @@ async def cb_main_menu(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
     await state.clear()
-    await callback.message.edit_text(_menu_text(), reply_markup=main_menu_kb())
+    await callback.message.edit_text(
+        _menu_text(),
+        reply_markup=main_menu_kb(show_admins=is_owner(callback.from_user.id)),
+    )
     await callback.answer()
 
 

@@ -29,3 +29,7 @@ from .proxy_kb import (
     proxy_detail_kb,
     proxy_cancel_kb,
 )
+from .admin_kb import (
+    admin_list_kb,
+    admin_cancel_kb,
+)

@@ -5,13 +5,14 @@ from aiogram.fsm.context import FSMContext
 from config import settings, bot as tg_bot
 from utils.FSM import AddWarmup
 from utils.logger import logger
+from utils.admin_access import is_admin
 from utils.database import AccountRepository, ProxyRepository, decrypt_session
 
 
 class CreationHelpers:
     @classmethod
     def is_admin(cls, tg_id: int) -> bool:
-        return tg_id in settings.admins_list
+        return is_admin(tg_id)
 
     @classmethod
     async def proxy_rows(cls) -> list[tuple[str, str, str, str, int]]:

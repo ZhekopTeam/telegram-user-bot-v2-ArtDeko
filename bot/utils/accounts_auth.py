@@ -6,6 +6,7 @@ from pyrogram import Client
 from pyrogram.errors import SessionPasswordNeeded
 from config import settings
 from utils.database import Account, AccountRepository, encrypt_session
+from utils.admin_access import is_admin
 from utils.logger import logger
 
 
@@ -23,7 +24,7 @@ class AccountAuth:
         self.account_in_auth: Optional[AccountInAuth] = None
 
     async def start_auth(self, admin_tg_id: int, phone: str):
-        if admin_tg_id not in settings.admins_list:
+        if not is_admin(admin_tg_id):
             raise PermissionError("User is not admin")
 
         Path(settings.SESSIONS_DIR).mkdir(parents=True, exist_ok=True)
@@ -56,7 +57,7 @@ class AccountAuth:
         return client
 
     async def confirm_code(self, admin_tg_id: int, code: str) -> str:
-        if admin_tg_id not in settings.admins_list:
+        if not is_admin(admin_tg_id):
             raise PermissionError("User is not admin")
 
         data = self.account_in_auth
@@ -80,7 +81,7 @@ class AccountAuth:
             raise
 
     async def confirm_password(self, admin_tg_id: int, password: str) -> None:
-        if admin_tg_id not in settings.admins_list:
+        if not is_admin(admin_tg_id):
             raise PermissionError("User is not admin")
 
         await self.account_in_auth.client.check_password(password)

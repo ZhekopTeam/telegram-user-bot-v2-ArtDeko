@@ -3,8 +3,8 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
-from config import settings
 from utils.logger import logger
+from utils.admin_access import is_admin
 from utils import SessionRepository, SheetsSync
 from utils.database import (
     WarmupGroupRepository,
@@ -24,9 +24,12 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 router_warmup_menu = Router(name="warmup_menu")
 
-
-def is_admin(tg_id: int) -> bool:
-    return tg_id in settings.admins_list
+_MESSAGE_STATUS_LABELS = {
+    "pending": "Ожидает",
+    "sent": "Отправлено",
+    "failed": "Ошибка",
+    "cancelled": "Отменено",
+}
 
 
 async def build_groups_view() -> list[tuple[str, str, str, str, int]]:
@@ -68,7 +71,8 @@ async def render_detail(callback: CallbackQuery, group_id: str) -> None:
 
     stats = await msg_repo.count_by_status_for_group(group_id)
     stats_str = " | ".join(
-        f"{k}: {v}" for k, v in sorted(stats.items())
+        f"{_MESSAGE_STATUS_LABELS.get(k, k)}: {v}"
+        for k, v in sorted(stats.items())
     ) or "нет сообщений"
 
     last_planned = (

@@ -4,8 +4,8 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
-from config import settings
 from utils.FSM import AddProxy
+from utils.admin_access import is_admin
 from utils.database import Proxy, ProxyRepository, encrypt_session, decrypt_session
 from utils import CreationHelpers
 from app.keyboards import (
@@ -15,10 +15,6 @@ from app.keyboards import (
 )
 
 router_proxy = Router(name="proxy")
-
-
-def is_admin(tg_id: int) -> bool:
-    return tg_id in settings.admins_list
 
 
 async def _proxy_rows() -> list[tuple[str, str, str, str, int, bool]]:
@@ -143,15 +139,13 @@ async def cb_proxy_add(callback: CallbackQuery, state: FSMContext) -> None:
 
 def parse_proxy(text: str) -> dict | None:
     text = text.strip()
-    
-    # 1. Extract protocol if present
+
     ptype = "socks5"
     prefix_match = re.match(r"^(socks5|socks4|http)(?::/+|[ \t]+)", text, re.IGNORECASE)
     if prefix_match:
         ptype = prefix_match.group(1).lower()
         text = text[prefix_match.end():].strip()
         
-    # 2. Try at-match (user:pass@host:port)
     at_match = re.match(r"^([^:]+):([^@]+)@([^:]+):(\d+)$", text)
     if at_match:
         return {
@@ -162,7 +156,6 @@ def parse_proxy(text: str) -> dict | None:
             "port": int(at_match.group(4))
         }
         
-    # 3. Try colon-4-match (host:port:user:pass)
     colon_4_match = re.match(r"^([^:]+):(\d+):([^:]+):([^:]+)$", text)
     if colon_4_match:
         return {
@@ -173,7 +166,6 @@ def parse_proxy(text: str) -> dict | None:
             "port": int(colon_4_match.group(2))
         }
         
-    # 4. Try colon-2-match (host:port)
     colon_2_match = re.match(r"^([^:]+):(\d+)$", text)
     if colon_2_match:
         return {
